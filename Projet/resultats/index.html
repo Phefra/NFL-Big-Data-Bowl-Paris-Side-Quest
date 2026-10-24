@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Man-Beating Separation · NFL Big Data Bowl</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#0a0e1a; }
+  .tab-active { background:#2563eb; color:#fff; }
+  .field-canvas { background:#15803d; border-radius:12px; width:100%; height:auto;
+                  box-shadow:0 12px 48px rgba(0,0,0,.55); }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#2a3a55; border-radius:6px; }
+  ::-webkit-scrollbar-track { background:#0f1626; }
+  .fade-in { animation:fade .35s ease; }
+  @keyframes fade { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+  .bar { transition:width .5s ease; }
+  .clickable { cursor:pointer; }
+</style>
+</head>
+<body class="text-slate-100 min-h-screen">
+
+<header class="max-w-6xl mx-auto px-5 pt-8 pb-4">
+  <div class="flex items-center gap-3">
+    <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center text-slate-900 font-black text-lg">MBS</div>
+    <div>
+      <h1 class="text-2xl md:text-3xl font-black tracking-tight">Man-Beating Separation</h1>
+      <p class="text-slate-400 text-sm">NFL Big Data Bowl · Quel receveur gagne son duel en 1-contre-1 ?</p>
+    </div>
+  </div>
+  <p class="mt-4 text-slate-300 text-[15px] leading-relaxed max-w-3xl">
+    Se demarquer contre une couverture de <b>zone</b> est relativement facile. Le vrai test,
+    c'est le <span class="text-yellow-300 font-semibold">marquage individuel</span> (man-to-man) :
+    un defenseur colle le receveur partout. On mesure la <b>separation</b> (distance au defenseur
+    au moment ou le ballon arrive) et on la decompose man vs zone. Les receveurs qui se liberent
+    <b>meme en individuel</b> sont ceux qui font gagner — et que les recruteurs s'arrachent.
+  </p>
+</header>
+
+<nav class="max-w-6xl mx-auto px-5 flex gap-2 border-b border-slate-800 sticky top-0 bg-[#0a0e1a] z-10 py-2 flex-wrap">
+  <button data-tab="replay"  class="tab px-4 py-2 rounded-lg font-semibold text-sm tab-active">🎬 Duels</button>
+  <button data-tab="ranking" class="tab px-4 py-2 rounded-lg font-semibold text-sm text-slate-300 hover:bg-slate-800">🏆 Classement</button>
+  <button data-tab="player"  class="tab px-4 py-2 rounded-lg font-semibold text-sm text-slate-300 hover:bg-slate-800">👤 Fiche joueur</button>
+  <button data-tab="analysis" class="tab px-4 py-2 rounded-lg font-semibold text-sm text-slate-300 hover:bg-slate-800">📊 Preuve & Analyse</button>
+</nav>
+
+<main class="max-w-6xl mx-auto px-5 py-6">
+
+  <!-- ONGLET DUELS -->
+  <section id="replay" class="tabpanel">
+    <div class="grid md:grid-cols-[320px_1fr] gap-6">
+      <aside class="space-y-3">
+        <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-3 space-y-3">
+          <input id="searchInput" type="text" placeholder="Rechercher un receveur..."
+                 class="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 ring-blue-500">
+          <div class="flex gap-2">
+            <select id="posFilter" class="flex-1 bg-slate-800 rounded-lg px-2 py-2 text-sm">
+              <option value="">Tous postes</option>
+              <option value="WR">WR</option><option value="TE">TE</option>
+              <option value="RB">RB</option><option value="FB">FB</option>
+            </select>
+            <select id="sepFilter" class="flex-1 bg-slate-800 rounded-lg px-2 py-2 text-sm">
+              <option value="0">Sep. ≥ 2 yd</option>
+              <option value="3">Sep. ≥ 3 yd</option>
+              <option value="4">Sep. ≥ 4 yd</option>
+              <option value="5">Sep. ≥ 5 yd</option>
+            </select>
+          </div>
+          <label class="flex items-center gap-2 text-sm text-slate-300">
+            <input type="checkbox" id="tdFilter" class="accent-yellow-400"> Touchdowns uniquement
+          </label>
+          <p id="listCount" class="text-xs text-slate-500"></p>
+        </div>
+        <div id="playList" class="space-y-2 max-h-[560px] overflow-y-auto pr-1"></div>
+      </aside>
+      <div>
+        <div id="playInfo" class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-3 min-h-[70px]"></div>
+        <canvas id="field" width="1000" height="460" class="field-canvas"></canvas>
+        <div class="flex items-center gap-3 mt-3 flex-wrap">
+          <button id="playBtn" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-lg font-semibold text-sm">▶ Lancer</button>
+          <button id="resetBtn" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg font-semibold text-sm">↺ Rejouer</button>
+          <input id="scrub" type="range" min="0" max="0" value="0" class="flex-1 accent-blue-500 min-w-[180px]">
+          <select id="speed" class="bg-slate-800 rounded-lg px-2 py-2 text-sm">
+            <option value="160">0.5x</option><option value="110" selected>1x</option><option value="60">2x</option>
+          </select>
+        </div>
+        <p id="phase" class="text-slate-400 text-sm mt-2 h-5"></p>
+        <div class="flex gap-4 flex-wrap mt-3 text-xs text-slate-300">
+          <span class="flex items-center gap-2"><i class="w-3 h-3 rounded-full inline-block" style="background:#4ade80"></i> Receveur vise (la cible)</span>
+          <span class="flex items-center gap-2"><i class="w-3 h-3 rounded-full inline-block" style="background:#ef4444"></i> Son defenseur direct</span>
+          <span class="flex items-center gap-2"><i class="w-3 h-3 rounded-full inline-block" style="background:#60a5fa"></i> Attaque</span>
+          <span class="flex items-center gap-2"><i class="w-3 h-3 rounded-full inline-block" style="background:#94a3b8"></i> Defense</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ONGLET CLASSEMENT -->
+  <section id="ranking" class="tabpanel hidden">
+    <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div>
+          <h2 class="text-lg font-bold">Classement : separation en 1-contre-1 (man-to-man)</h2>
+          <p class="text-slate-400 text-sm">Separation moyenne de la cible face au marquage individuel. Clique sur un joueur pour sa fiche.</p>
+        </div>
+        <select id="rankPosFilter" class="bg-slate-800 rounded-lg px-3 py-2 text-sm">
+          <option value="">Tous postes</option>
+          <option value="WR">WR</option><option value="TE">TE</option>
+          <option value="RB">RB</option><option value="FB">FB</option>
+        </select>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-slate-400 text-left border-b border-slate-800">
+            <tr>
+              <th class="py-2 pr-2">#</th><th class="pr-2">Joueur</th><th class="pr-2">Poste</th>
+              <th class="pr-2 text-right">Duels man</th>
+              <th class="pr-2">Sep. en MAN (yd)</th>
+              <th class="pr-2 text-right">Sep. en zone</th>
+              <th class="pr-2 text-right">Reussite man</th>
+            </tr>
+          </thead>
+          <tbody id="rankBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ONGLET FICHE JOUEUR -->
+  <section id="player" class="tabpanel hidden">
+    <div id="playerEmpty" class="text-slate-400 text-sm bg-slate-900/60 border border-slate-800 rounded-xl p-6">
+      Choisis un joueur dans le <b>Classement</b> (clique sur sa ligne) pour afficher sa fiche complete :
+      scores, verdict scout et toutes ses actions connectees.
+    </div>
+    <div id="playerCard" class="hidden"></div>
+  </section>
+
+  <!-- ONGLET PREUVE & ANALYSE -->
+  <section id="analysis" class="tabpanel hidden">
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 md:col-span-2">
+        <h2 class="text-lg font-bold mb-1">La preuve : plus de separation = plus de reussite</h2>
+        <p class="text-slate-400 text-sm mb-4">Taux de reussite de l'action selon la separation du receveur vise (toutes couvertures).</p>
+        <div id="impactChart" class="space-y-3"></div>
+      </div>
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5">
+        <h2 class="text-lg font-bold mb-1">Man vs Zone : le grand ecart</h2>
+        <p class="text-slate-400 text-sm mb-4">Separation moyenne et reussite selon le type de couverture.</p>
+        <div id="covChart" class="space-y-4"></div>
+      </div>
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5">
+        <h2 class="text-lg font-bold mb-1">Separation par poste (man vs zone)</h2>
+        <p class="text-slate-400 text-sm mb-4">Qui se libere le mieux en individuel ?</p>
+        <div id="posChart" class="space-y-4"></div>
+      </div>
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 md:col-span-2">
+        <h2 class="text-lg font-bold mb-2">Lecture pour un recruteur</h2>
+        <p id="analysisText" class="text-slate-300 text-sm leading-relaxed"></p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="max-w-6xl mx-auto px-5 py-8 text-slate-500 text-xs border-t border-slate-800 mt-6">
+  Donnees : NFL Next Gen Stats + PFF (Big Data Bowl). Analyse en Python pur.
+  Separation = distance du receveur vise au defenseur le plus proche, ~0.8 s apres le depart de la passe.
+  Type de couverture (man/zone) fourni par PFF.
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
